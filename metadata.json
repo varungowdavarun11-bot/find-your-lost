@@ -1,0 +1,7 @@
+{
+  "name": "CampusFind",
+  "description": "A smart Lost and Found application for colleges, powered by Gemini AI for automatic item recognition and description generation.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
