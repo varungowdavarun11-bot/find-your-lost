@@ -251,7 +251,7 @@ const App = () => {
                 </div>
                 <div>
                   <h3 className="text-2xl font-bold text-slate-900 mb-2">Student</h3>
-                  <p className="text-slate-500 text-sm leading-relaxed">Join your college community to find or report lost items.</p>
+                  <p className="text-slate-500 text-sm leading-relaxed">Join your campus community to find or report lost items.</p>
                 </div>
                 <div className="mt-auto flex items-center gap-2 font-bold text-indigo-600 group-hover:translate-x-1 transition-transform">
                   Enter Portal <ChevronRight size={18} />
@@ -266,8 +266,8 @@ const App = () => {
                   <ShieldCheck size={40} />
                 </div>
                 <div>
-                  <h3 className="text-2xl font-bold text-slate-900 mb-2">College</h3>
-                  <p className="text-slate-500 text-sm leading-relaxed">Establish and manage an official lost & found portal for your campus.</p>
+                  <h3 className="text-2xl font-bold text-slate-900 mb-2 text-nowrap">College or School</h3>
+                  <p className="text-slate-500 text-sm leading-relaxed">Establish and manage an official lost & found portal for your institution.</p>
                 </div>
                 <div className="mt-auto flex items-center gap-2 font-bold text-indigo-600 group-hover:translate-x-1 transition-transform">
                   Register Portal <ChevronRight size={18} />
@@ -284,24 +284,24 @@ const App = () => {
                     <ArrowLeft size={18} className="mr-2" /> Back
                   </button>
                   <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-bold uppercase tracking-widest">
-                    {loginRole} Login
+                    {loginRole === 'college' ? 'College/School' : 'Student'} Login
                   </span>
               </div>
 
               <div className="space-y-1">
                 <h2 className="text-3xl font-bold text-slate-900">
-                  {loginRole === 'college' ? 'Create your College ID' : 'Enter your College ID'}
+                  {loginRole === 'college' ? 'Create your College or School ID' : 'Enter your College or School ID'}
                 </h2>
                 <p className="text-slate-500">
                   {loginRole === 'college' 
-                    ? 'Define your official campus identifier.' 
+                    ? 'Define your official institution identifier.' 
                     : 'Access the official portal for your institution.'}
                 </p>
               </div>
 
               <form onSubmit={handleLogin} className="space-y-5">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">College ID / Access Code</label>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">College/School ID / Access Code</label>
                   <input
                     type="text"
                     required
@@ -405,7 +405,7 @@ const App = () => {
                   <h3 className="text-lg font-semibold text-slate-900">No items found</h3>
                   <p className="text-slate-500 max-w-xs mx-auto mt-2">
                     {searchQuery 
-                      ? `No matches for your search in the current college portal.` 
+                      ? `No matches for your search in the current portal.` 
                       : `The portal for ${user?.collegeId} is currently empty.`}
                   </p>
                 </div>
