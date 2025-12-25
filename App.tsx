@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { User, FoundItem, ViewState } from './types';
 import { analyzeItemImage } from './services/geminiService';
@@ -20,7 +21,9 @@ import {
   CheckCircle,
   ShieldCheck,
   GraduationCap,
-  ChevronRight
+  ChevronRight,
+  AlertCircle,
+  AlertTriangle
 } from 'lucide-react';
 
 // --- MOCK DATA SEED ---
@@ -71,16 +74,19 @@ const App = () => {
   const [loginRole, setLoginRole] = useState<'student' | 'college' | null>(null);
   
   const [items, setItems] = useState<FoundItem[]>([]);
+  const [registeredColleges, setRegisteredColleges] = useState<string[]>(['MIT', 'STANFORD']);
   const [selectedItem, setSelectedItem] = useState<FoundItem | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
   // Login Form State
   const [collegeCodeInput, setCollegeCodeInput] = useState('');
   const [userNameInput, setUserNameInput] = useState('');
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   // Upload Form State
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [uploadImage, setUploadImage] = useState<string | null>(null);
+  const [aiGeneratedDetected, setAiGeneratedDetected] = useState(false);
   const [newItemName, setNewItemName] = useState('');
   const [newItemDesc, setNewItemDesc] = useState('');
   const [newItemDate, setNewItemDate] = useState(new Date().toISOString().split('T')[0]);
@@ -100,6 +106,11 @@ const App = () => {
     } else {
       setItems(MOCK_ITEMS);
     }
+
+    const storedColleges = localStorage.getItem('campusfind_colleges');
+    if (storedColleges) {
+      setRegisteredColleges(JSON.parse(storedColleges));
+    }
   }, []);
 
   useEffect(() => {
@@ -108,20 +119,46 @@ const App = () => {
     }
   }, [items]);
 
+  useEffect(() => {
+    localStorage.setItem('campusfind_colleges', JSON.stringify(registeredColleges));
+  }, [registeredColleges]);
+
   // --- HANDLERS ---
   const handleRoleSelect = (role: 'student' | 'college') => {
     setLoginRole(role);
     setLoginStep('FORM');
+    setLoginError(null);
   };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (collegeCodeInput && (loginRole === 'college' || userNameInput)) {
-      setUser({
-        collegeId: collegeCodeInput.toUpperCase(),
-        studentId: loginRole === 'college' ? `${collegeCodeInput.toUpperCase()} Admin` : userNameInput
-      });
-      setView('DASHBOARD');
+    setLoginError(null);
+    const code = collegeCodeInput.toUpperCase();
+
+    if (loginRole === 'student') {
+      if (!registeredColleges.includes(code)) {
+        setLoginError("This College/School ID is not registered in our system.");
+        return;
+      }
+      if (code && userNameInput) {
+        setUser({
+          collegeId: code,
+          studentId: userNameInput
+        });
+        setView('DASHBOARD');
+      }
+    } else {
+      // College Role creates the ID if it doesn't exist
+      if (code) {
+        if (!registeredColleges.includes(code)) {
+          setRegisteredColleges(prev => [...prev, code]);
+        }
+        setUser({
+          collegeId: code,
+          studentId: `${code} Admin`
+        });
+        setView('DASHBOARD');
+      }
     }
   };
 
@@ -132,6 +169,7 @@ const App = () => {
     setLoginRole(null);
     setCollegeCodeInput('');
     setUserNameInput('');
+    setLoginError(null);
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -142,15 +180,24 @@ const App = () => {
     reader.onloadend = async () => {
       const base64 = reader.result as string;
       setUploadImage(base64);
+      setAiGeneratedDetected(false);
       
       setIsAnalyzing(true);
       try {
         const analysis = await analyzeItemImage(base64);
-        setNewItemName(analysis.name);
-        setNewItemDesc(analysis.description);
-        setNewItemTags(analysis.tags);
-        if(analysis.suggestedLocation) {
-            if(!newItemLocation) setNewItemLocation(analysis.suggestedLocation);
+        
+        if (analysis.isLikelyAI) {
+          setAiGeneratedDetected(true);
+          setNewItemName('');
+          setNewItemDesc('');
+          setNewItemTags([]);
+        } else {
+          setNewItemName(analysis.name);
+          setNewItemDesc(analysis.description);
+          setNewItemTags(analysis.tags);
+          if(analysis.suggestedLocation) {
+              if(!newItemLocation) setNewItemLocation(analysis.suggestedLocation);
+          }
         }
       } catch (err) {
         console.error("Analysis failed", err);
@@ -163,7 +210,7 @@ const App = () => {
 
   const handleSubmitItem = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !uploadImage) return;
+    if (!user || !uploadImage || aiGeneratedDetected) return;
 
     const newItem: FoundItem = {
       id: Date.now().toString(),
@@ -207,6 +254,7 @@ const App = () => {
 
   const resetUploadForm = () => {
     setUploadImage(null);
+    setAiGeneratedDetected(false);
     setNewItemName('');
     setNewItemDesc('');
     setNewItemDate(new Date().toISOString().split('T')[0]);
@@ -278,7 +326,10 @@ const App = () => {
             <div className="bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 p-10 space-y-8 animate-in slide-in-from-bottom-4 fade-in duration-500">
               <div className="flex items-center justify-between">
                  <button 
-                    onClick={() => setLoginStep('SELECT')}
+                    onClick={() => {
+                        setLoginStep('SELECT');
+                        setLoginError(null);
+                    }}
                     className="flex items-center text-slate-400 hover:text-indigo-600 font-bold transition-colors"
                   >
                     <ArrowLeft size={18} className="mr-2" /> Back
@@ -306,10 +357,19 @@ const App = () => {
                     type="text"
                     required
                     placeholder="Enter unique ID"
-                    className="w-full px-5 py-4 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500 outline-none transition-all font-bold uppercase placeholder:normal-case"
+                    className={`w-full px-5 py-4 rounded-2xl border-2 bg-slate-50 focus:bg-white focus:border-indigo-500 outline-none transition-all font-bold uppercase placeholder:normal-case ${loginError ? 'border-red-200 bg-red-50' : 'border-slate-100'}`}
                     value={collegeCodeInput}
-                    onChange={(e) => setCollegeCodeInput(e.target.value)}
+                    onChange={(e) => {
+                        setCollegeCodeInput(e.target.value);
+                        setLoginError(null);
+                    }}
                   />
+                  {loginError && (
+                    <div className="flex items-center gap-2 text-red-500 text-xs font-bold mt-1 ml-1 animate-in fade-in slide-in-from-top-1">
+                        <AlertCircle size={14} />
+                        {loginError}
+                    </div>
+                  )}
                 </div>
 
                 {loginRole === 'student' && (
@@ -329,6 +389,19 @@ const App = () => {
                 <Button type="submit" className="w-full py-5 text-xl font-bold shadow-xl shadow-indigo-100 mt-4">
                   {loginRole === 'college' ? 'Set up Portal' : 'Access Portal'}
                 </Button>
+                
+                {loginRole === 'student' && (
+                   <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100">
+                        <p className="text-[10px] font-bold text-indigo-700 uppercase tracking-widest text-center">Registered IDs for Demo</p>
+                        <div className="flex justify-center gap-2 mt-2">
+                            {registeredColleges.slice(0, 3).map(id => (
+                                <span key={id} className="px-2 py-0.5 bg-white text-indigo-600 text-[10px] font-bold rounded-lg border border-indigo-200">
+                                    {id}
+                                </span>
+                            ))}
+                        </div>
+                   </div>
+                )}
               </form>
             </div>
           )}
@@ -640,7 +713,7 @@ const App = () => {
                         </div>
                     ) : (
                         <div className="w-full aspect-[4/3] rounded-3xl overflow-hidden relative shadow-lg bg-black">
-                            <img src={uploadImage} alt="Preview" className={`w-full h-full object-contain ${isAnalyzing ? 'opacity-50' : 'opacity-100'}`} />
+                            <img src={uploadImage} alt="Preview" className={`w-full h-full object-contain ${isAnalyzing ? 'opacity-50' : 'opacity-100'} ${aiGeneratedDetected ? 'opacity-30 blur-sm' : ''}`} />
                             
                             {isAnalyzing && (
                                 <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
@@ -648,11 +721,22 @@ const App = () => {
                                     <span className="font-bold text-lg animate-pulse">Analyzing...</span>
                                 </div>
                             )}
+
+                            {aiGeneratedDetected && !isAnalyzing && (
+                              <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-6 text-center">
+                                  <AlertTriangle size={48} className="text-amber-500 mb-3" />
+                                  <h3 className="text-xl font-bold mb-1">AI Generated Image Detected</h3>
+                                  <p className="text-sm opacity-90">We only accept real-world photographs of physical lost items. Synthetic or AI-generated images are not permitted.</p>
+                              </div>
+                            )}
                             
                             {!isAnalyzing && (
                                 <button
                                     type="button" 
-                                    onClick={() => setUploadImage(null)}
+                                    onClick={() => {
+                                      setUploadImage(null);
+                                      setAiGeneratedDetected(false);
+                                    }}
                                     className="absolute top-4 right-4 p-2 bg-black/50 text-white rounded-full hover:bg-red-500 backdrop-blur-md transition-colors"
                                 >
                                     <X size={20} />
@@ -663,15 +747,23 @@ const App = () => {
                 </div>
 
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
+                    <div className="p-3 bg-amber-50 rounded-xl border border-amber-100 flex gap-3 items-center">
+                        <AlertTriangle className="text-amber-500 shrink-0" size={18} />
+                        <p className="text-[11px] text-amber-800 font-medium">
+                          <strong>Notice:</strong> Only upload real photos. AI-generated or synthetic images will be automatically rejected.
+                        </p>
+                    </div>
+
                     <div className="space-y-1.5">
                         <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Item Name *</label>
                         <input
                             type="text"
                             required
+                            disabled={aiGeneratedDetected}
                             placeholder="Enter item name"
                             value={newItemName}
                             onChange={(e) => setNewItemName(e.target.value)}
-                            className="w-full px-4 py-3.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium"
+                            className="w-full px-4 py-3.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium disabled:opacity-50"
                         />
                     </div>
 
@@ -681,19 +773,21 @@ const App = () => {
                             <input
                                 type="date"
                                 required
+                                disabled={aiGeneratedDetected}
                                 value={newItemDate}
                                 onChange={(e) => setNewItemDate(e.target.value)}
-                                className="w-full px-4 py-3.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium"
+                                className="w-full px-4 py-3.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium disabled:opacity-50"
                             />
                         </div>
                          <div className="space-y-1.5">
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Location Details</label>
                             <input
                                 type="text"
+                                disabled={aiGeneratedDetected}
                                 placeholder="Enter specific location"
                                 value={newItemLocation}
                                 onChange={(e) => setNewItemLocation(e.target.value)}
-                                className="w-full px-4 py-3.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium"
+                                className="w-full px-4 py-3.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium disabled:opacity-50"
                             />
                         </div>
                     </div>
@@ -702,10 +796,11 @@ const App = () => {
                         <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Item Description</label>
                         <textarea
                             rows={3}
+                            disabled={aiGeneratedDetected}
                             placeholder="Provide any identifying features"
                             value={newItemDesc}
                             onChange={(e) => setNewItemDesc(e.target.value)}
-                            className="w-full px-4 py-3.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none font-medium"
+                            className="w-full px-4 py-3.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none font-medium disabled:opacity-50"
                         />
                     </div>
                 </div>
@@ -713,10 +808,10 @@ const App = () => {
                 <div className="pb-8">
                      <Button 
                         type="submit" 
-                        disabled={!uploadImage || isAnalyzing}
+                        disabled={!uploadImage || isAnalyzing || aiGeneratedDetected}
                         className="w-full py-4 text-lg font-bold shadow-xl shadow-indigo-100"
                     >
-                        Publish Finding
+                        {aiGeneratedDetected ? 'Upload Blocked' : 'Publish Finding'}
                     </Button>
                 </div>
               </form>

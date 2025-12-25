@@ -1,3 +1,4 @@
+
 export interface FoundItem {
   id: string;
   collegeId: string; // The college/org ID this item belongs to
@@ -25,4 +26,5 @@ export interface AIAnalysisResult {
   category: string;
   tags: string[];
   suggestedLocation?: string;
+  isLikelyAI: boolean; // New field to detect AI generated images
 }

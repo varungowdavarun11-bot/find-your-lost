@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AIAnalysisResult } from "../types";
 
@@ -29,9 +30,13 @@ const analysisSchema: Schema = {
     suggestedLocation: {
         type: Type.STRING,
         description: "Infer a possible context or type of location based on the background if visible (e.g., 'Library desk', 'Outdoor bench'), otherwise leave empty."
+    },
+    isLikelyAI: {
+      type: Type.BOOLEAN,
+      description: "True if the image appears to be AI-generated, synthetic, or non-photographic. False if it looks like a real-world photo of a physical object."
     }
   },
-  required: ["name", "description", "category", "tags"],
+  required: ["name", "description", "category", "tags", "isLikelyAI"],
 };
 
 export const analyzeItemImage = async (base64Image: string): Promise<AIAnalysisResult> => {
@@ -50,19 +55,19 @@ export const analyzeItemImage = async (base64Image: string): Promise<AIAnalysisR
         parts: [
           {
             inlineData: {
-              mimeType: "image/jpeg", // Assuming JPEG for simplicity from canvas conversions usually
+              mimeType: "image/jpeg", 
               data: cleanBase64(base64Image),
             },
           },
           {
-            text: "Analyze this image of a lost/found item. Provide a structured description to help the owner find it.",
+            text: "Analyze this image. First, determine if it is a real-world photograph of a lost item. If it is AI-generated, synthetic, or a digitally created illustration, flag it using the isLikelyAI field. Otherwise, provide a structured description.",
           },
         ],
       },
       config: {
         responseMimeType: "application/json",
         responseSchema: analysisSchema,
-        systemInstruction: "You are a helpful assistant for a college Lost and Found system. Be precise and descriptive.",
+        systemInstruction: "You are a quality control assistant for a college Lost and Found system. Your primary job is to ensure only real photos of physical lost items are uploaded. You must detect and reject AI-generated or synthetic images.",
       },
     });
 
@@ -79,6 +84,7 @@ export const analyzeItemImage = async (base64Image: string): Promise<AIAnalysisR
       description: "",
       category: "Uncategorized",
       tags: [],
+      isLikelyAI: false
     };
   }
 };
